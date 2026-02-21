@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv*/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+experiments/results/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local config overrides
+.env
+*.env
+
+# Cache files
+utils/.umls_cache.json
+.cache/
+
+# Large data directories (Git LFS or local only)
+combined/
+reports/
+runs/
+logs/
+anthropic-claude-3-5-haiku-latest/
