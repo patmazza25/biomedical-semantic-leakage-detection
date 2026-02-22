@@ -166,14 +166,62 @@ def _ensure_model() -> bool:
 # NLI scoring
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _heuristic_nli(premise: str, hypothesis: str) -> Dict[str, float]:
+    """
+    Lightweight heuristic NLI based on token overlap and biomedical negation/direction patterns.
+    Used as a fallback when no transformer model is available.
+
+    Signals:
+      • Token overlap → entailment prior  (consecutive CoT steps share vocabulary)
+      • Negation mismatch (neg_i XOR neg_j) → contradiction boost
+      • Opposite-direction verbs (increase vs decrease) → contradiction boost
+    """
+    p_toks = set(re.sub(r"[^a-z0-9 ]", " ", (premise or "").lower()).split())
+    h_toks = set(re.sub(r"[^a-z0-9 ]", " ", (hypothesis or "").lower()).split())
+
+    # Remove stopwords
+    _STOP = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
+              "being", "have", "has", "had", "do", "does", "did", "will",
+              "would", "could", "should", "may", "might", "in", "of", "to",
+              "and", "or", "but", "that", "this", "it", "its", "at", "by",
+              "for", "with", "as", "on", "from", "can"}
+    p_toks -= _STOP
+    h_toks -= _STOP
+
+    # Token overlap ratio (relative to hypothesis length, like precision)
+    overlap = len(p_toks & h_toks) / max(len(h_toks), 1) if h_toks else 0.0
+
+    neg_p = _neg_present(premise)
+    neg_h = _neg_present(hypothesis)
+    pos_p = _pos_present(premise)
+    pos_h = _pos_present(hypothesis)
+    ant_p = _ant_present(premise)
+    ant_h = _ant_present(hypothesis)
+
+    # --- contradiction signals ---
+    contra = 0.05  # small base
+    if neg_p ^ neg_h:                        # one negated, the other not
+        contra += 0.35
+    if (pos_p and ant_h) or (ant_p and pos_h):  # opposite effect verbs
+        contra += 0.25
+
+    # --- entailment signals ---
+    # High overlap → consecutive step likely extends the same idea
+    entail = min(0.65, overlap * 0.85)
+
+    # Fallback: if no strong signal, lean neutral
+    neutral = max(0.05, 1.0 - entail - contra)
+
+    return _renorm({"entailment": entail, "neutral": neutral, "contradiction": contra})
+
+
 def _nli_scores_batch(pairs: List[Tuple[str, str]], max_length: int = 256, batch_size: int = 8) -> List[Dict[str, float]]:
     """
     Returns a list of dicts with keys: entailment, neutral, contradiction (probabilities).
-    Falls back to heuristic neutral if model not present.
+    Falls back to token-overlap heuristic if model not present.
     """
     if not _ensure_model():
-        # No transformers: neutral everywhere (still counts for coverage in your metrics)
-        return [{"entailment": 0.0, "neutral": 1.0, "contradiction": 0.0} for _ in pairs]
+        return [_heuristic_nli(p, h) for p, h in pairs]
 
     from math import ceil
     import torch  # type: ignore
