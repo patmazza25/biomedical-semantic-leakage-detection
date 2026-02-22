@@ -147,6 +147,9 @@ def _try_load(model_name: str) -> bool:
         return False
 
 def _ensure_model() -> bool:
+    # Set FORCE_HEURISTIC_NLI=1 to skip all model loading and use the fast heuristic
+    if os.getenv("FORCE_HEURISTIC_NLI", "").strip() in ("1", "true", "yes"):
+        return False
     if _TRANSFORMERS_OK and _TOK is not None and _MOD is not None:
         return True
     # try candidates in order
