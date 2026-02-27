@@ -384,7 +384,8 @@ def _entailment_with_umls(steps: List[str], umls_per_step: List[List[Dict[str, A
                         "E": float(probs.get("entailment", 0.0)),
                         "N": float(probs.get("neutral", 0.0)),
                         "C": float(probs.get("contradiction", 0.0)),
-                    }
+                    },
+                    "meta": r.get("meta", {}),
                 })
             return out
         except Exception as e:
@@ -573,6 +574,30 @@ def process_question(
     except Exception as e:
         logging.warning("[entailment] failed: %s", e)
         record["errors"].append(f"entailment: {e}")
+
+    # 3b) Guard signals (using UMLS relation metadata from hybrid checker)
+    try:
+        from utils.guards import derive_guards
+        for pair_rec in record.get("entailment_pairs", []):
+            si = steps[pair_rec.get("i", 0)] if pair_rec.get("i", 0) < len(steps) else ""
+            sj = steps[pair_rec.get("j", 1)] if pair_rec.get("j", 1) < len(steps) else ""
+            scores = pair_rec.get("scores", {})
+            probs_for_guard = {
+                "entailment": scores.get("E", 0.0),
+                "neutral": scores.get("N", 0.0),
+                "contradiction": scores.get("C", 0.0),
+            }
+            meta = pair_rec.get("meta") or {}
+            guards = derive_guards(
+                premise=si,
+                hypothesis=sj,
+                probs=probs_for_guard,
+                relation_violation=bool(meta.get("relation_violation", False)),
+                ontology_override_signal=bool(meta.get("ontology_support", False)),
+            )
+            pair_rec["guards"] = guards
+    except Exception as e:
+        logging.debug("[guards] guard computation skipped: %s", e)
 
     record["duration_s"] = round(time.time() - t0, 3)
 

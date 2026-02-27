@@ -1,5 +1,5 @@
 # config.py
-# Set API keys via environment variables, or fill in your own below.
+# Set API keys via environment variables or a .env file in the project root.
 # Example:
 #   export ANTHROPIC_API_KEY="sk-ant-..."
 #   export OPENAI_API_KEY="sk-proj-..."
@@ -7,6 +7,16 @@
 #   export UMLS_API_KEY="your-umls-key"
 #   export UMLS_USERNAME="your-umls-username"
 import os
+from pathlib import Path
+
+# Load .env file if present (python-dotenv is in requirements.txt)
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+except ImportError:
+    pass
 
 ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY     = os.getenv("OPENAI_API_KEY", "")
